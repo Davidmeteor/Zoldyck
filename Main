@@ -1,1 +1,120 @@
-print "test"
+import sys
+from datetime import datetime
+
+import numpy as np
+import talib
+import matplotlib.finance as fin
+
+
+from pandas import Index, DataFrame, Series
+from pandas.core.datetools import BMonthEnd
+from pandas import ols
+
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
+from matplotlib.finance import candlestick_ochl
+from matplotlib.finance import volume_overlay
+from matplotlib.dates import num2date
+from matplotlib.dates import date2num
+from matplotlib.dates import DateFormatter, WeekdayLocator,DayLocator, MONDAY
+from pylab import show
+
+
+
+def getQuotes(symbol, start, end):
+    """ get stock Quotes from Yahoo """
+
+    quotes = fin.quotes_historical_yahoo_ochl(symbol, start, end)
+    dates, open, close, high, low, volume = zip(*quotes)
+
+    dates = Index([datetime.fromordinal(int(d)) for d in dates])
+
+    data = {
+        'dates': dates,
+        'open': open,
+        'close': close,
+        'high': high,
+        'low': low,
+        'volume': volume
+    }
+
+    #data2 = DataFrame(data, index=dates)
+    #print data2['open']
+    plot(quotes, DataFrame(data, index=dates))
+
+    return DataFrame(data, index=dates)
+
+def plot(quotes, data):
+
+    mondays = WeekdayLocator(MONDAY)        # major ticks on the mondays
+    alldays = DayLocator()              # minor ticks on the days
+    weekFormatter = DateFormatter('%b %d')  # e.g., Jan 12
+    dayFormatter = DateFormatter('%d')      # e.g., 12
+
+    fig = plt.figure()
+    ax = fig.add_subplot(1,1,1)
+    fig.subplots_adjust(bottom=0.2)
+    ax.xaxis.set_major_locator(mondays)
+    ax.xaxis.set_minor_locator(alldays)
+    ax.xaxis.set_major_formatter(weekFormatter)
+    candlestick_ochl(ax, quotes, width=0.6, colorup='g', colordown='r')
+
+    ax.set_ylabel('Quote ($)', size=20)
+    #ax.set_xlabel('Date', size=20)
+
+    # shift y-limits of the candlestick plot so that there is space at the bottom for the volume bar chart
+    pad = 0.25
+    yl = ax.get_ylim()
+    ax.set_ylim(yl[0]-(yl[1]-yl[0])*pad,yl[1])
+
+    # create the second axis for the volume bar-plot
+    ax2 = ax.twinx()
+
+    # set the position of ax2 so that it is short (y2=0.32) but otherwise the same size as ax
+    ax2.set_position(matplotlib.transforms.Bbox([[0.125,0.2],[0.9,0.32]]))
+
+    # get data from candlesticks for a bar plot
+    dates = [x for x in data['dates']]
+    dates = np.asarray(dates)
+
+    volume = [x for x in data['volume']]
+    volume = np.asarray(volume)
+
+    # make bar plots and color differently depending on up/down for the day
+    pos = data['open']-data['close']>0
+
+    idx = 0
+    for x in pos:
+        if x:
+            ax2.bar(dates[idx],volume[idx],color='red',width=1,align='center')
+        else:
+            ax2.bar(dates[idx],volume[idx],color='green',width=1,align='center')
+        idx += 1
+
+    # the y-ticks for the bar were too dense, keep only every third one
+    yticks = ax2.get_yticks()
+    ax2.set_yticks(yticks[::3])
+
+    ax2.yaxis.set_label_position("right")
+    ax2.set_ylabel('Volume', size=20)
+
+    ax.xaxis_date()
+    ax.autoscale_view()
+    plt.setp(ax.get_xticklabels(), rotation=45, horizontalalignment='right')
+    #plt.setp(ax2.get_xticklabels(), rotation=45, horizontalalignment='right')
+    #plt.ion()
+
+    plt.show()
+
+def main():
+    # get stock info from start to end
+    startDate = datetime(2014, 6, 1)
+    endDate = datetime(2015, 1, 30)
+
+    # get stock id
+    goog = getQuotes('GOOG', startDate, endDate)
+    #print goog
+
+if __name__ == '__main__':
+    main()
