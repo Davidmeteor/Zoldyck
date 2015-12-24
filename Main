@@ -114,7 +114,7 @@ def main():
 
     # get stock id
     goog = getQuotes('GOOG', startDate, endDate)
-    #print goog
+
 
 if __name__ == '__main__':
     main()
