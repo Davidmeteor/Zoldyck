@@ -5,7 +5,7 @@ import numpy as np
 import talib
 import matplotlib.finance as fin
 
-
+import pandas as pd
 from pandas import Index, DataFrame, Series
 from pandas.core.datetools import BMonthEnd
 from pandas import ols
@@ -39,11 +39,7 @@ def getQuotes(symbol, start, end):
         'volume': volume
     }
 
-    #data2 = DataFrame(data, index=dates)
-    #print data2['open']
-    plot(quotes, DataFrame(data, index=dates))
-
-    return DataFrame(data, index=dates)
+    return quotes, DataFrame(data, index=dates)
 
 def plot(quotes, data):
 
@@ -105,16 +101,66 @@ def plot(quotes, data):
     #plt.setp(ax2.get_xticklabels(), rotation=45, horizontalalignment='right')
     #plt.ion()
 
-    plt.show()
+
+
+def turtle_rules(data):
+    N1 = 20
+    N2 = 10
+
+    data['highest_in_past_N1_days'] = pd.rolling_max(data['high'], N1)
+    data['highest_in_past_N1_days'].fillna(value=pd.expanding_max(data['high']), inplace=True)
+    #print data['highest_in_past_N1_days']
+
+    data['lowest_in_past_N2_days'] = pd.rolling_min(data['low'], N2)
+    data['lowest_in_past_N2_days'].fillna(value=pd.expanding_min(data['low']), inplace=True)
+    #print data['lowest_in_past_N2_days']
+
+    buy_sig = data[data['close'] > data['highest_in_past_N1_days'].shift(1)].index
+    data.loc[buy_sig, 'signal'] = 1
+    #print buy_sig
+
+    sell_sig = data[data['close'] < data['lowest_in_past_N2_days'].shift(1)].index
+    data.loc[sell_sig, 'signal'] = 0
+    #print sell_sig
+
+    #print data['signal']
+
+    data['property'] = data['signal'].shift(1)
+    data['property'].fillna(method='ffill', inplace=True)
+    #print data['property']
+
+    data['change'] = (data['close'] - data['open']) / data['open']
+    #print data['change']
+
+    data['money'] = (data['change'] * data['property'] + 1.0).cumprod()
+    initial_idx = data.iloc[0]['close'] / (1 + data.iloc[0]['change'])
+    data['money'] *= initial_idx
+    #print data['money']
+
+    data['turtle_rules'] = data['change'] * data['property']
+    #print data['turtle_rules']
+
+    year_per = data.set_index('dates')[['change', 'turtle_rules']].resample('A', how=lambda x: (x + 1.0).prod()-1.0) * 100
+    print year_per
+
+    pass
 
 def main():
     # get stock info from start to end
-    startDate = datetime(2014, 6, 1)
+    startDate = datetime(2011, 1, 30)
     endDate = datetime(2015, 1, 30)
 
-    # get stock id
-    goog = getQuotes('GOOG', startDate, endDate)
+    # get stock id and print the plot
+    goog_quotes, goog = getQuotes('YHOO', startDate, endDate)
 
+    # plot the chart
+    plot(goog_quotes, goog)
+
+    turtle_rules(goog)
+
+    #yahoo = getQuotes('YHOO', startDate, endDate)
+
+    plt.show()
 
 if __name__ == '__main__':
     main()
